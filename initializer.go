@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
+	"database/sql"
 	"github.com/garyburd/redigo/redis"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/jinzhu/gorm"
+	"log"
 )
 
 func connectRedis() (c redis.Conn) {
@@ -15,8 +15,8 @@ func connectRedis() (c redis.Conn) {
 	return c
 }
 
-func connectMysql() (c gorm.DB) {
-	db, err := gorm.Open("mysql", "root:root@/oqa")
+func connectMysql() *sql.DB {
+	db, err := sql.Open("mysql", "root:root@/oqa")
 	if err != nil {
 		panic(err)
 	}
@@ -24,19 +24,37 @@ func connectMysql() (c gorm.DB) {
 }
 
 var redis_conn = connectRedis()
-var mysql_conn = connectMysql()
+var mysql_db = connectMysql()
 
 func main() {
-	insertToRedis(0)
+	getShardData()
 }
 
-func getShardData() {}
+func getShardData() {
+	var (
+		id        int
+		projectid string
+		sharded   int
+	)
+	rows, err := mysql_db.Query("select * from test")
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		err := rows.Scan(&id, &projectid, &sharded)
+		if err != nil {
+			panic(err)
+		}
+		insertToRedis(projectid, sharded)
+	}
+}
 
-func insertToRedis(i int) {
-	n, err := redis_conn.Do("HSET", "oqa_shard", "key", "value")
+func insertToRedis(k string, v int) {
+	n, err := redis_conn.Do("HSET", "oqa_shard", k, v)
 	if err != nil {
 		panic(err)
 	} else {
-		fmt.Println(n)
+		log.Println(n, k, v)
 	}
 }
