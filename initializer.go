@@ -2,12 +2,39 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"github.com/garyburd/redigo/redis"
 	_ "github.com/go-sql-driver/mysql"
-	"log"
+	"os"
 )
 
-func connectRedis() (c redis.Conn) {
+type Config struct {
+	MySQL []string
+}
+
+func loadConfig() Config {
+	file, _ := os.Open("config.json")
+	decoder := json.NewDecoder(file)
+	c := Config{}
+	err := decoder.Decode(&c)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+	return c
+}
+
+// MySQL
+func connectMysql(cfg Config) *sql.DB {
+	db, err := sql.Open("mysql", cfg.MySQL[1]+":"+cfg.MySQL[2]+"@tcp("+cfg.MySQL[0]+")/"+cfg.MySQL[3])
+	if err != nil {
+		panic(err)
+	}
+	return db
+}
+
+// Redis
+func connectRedis(cfg Config) (c redis.Conn) {
 	c, err := redis.Dial("tcp", ":6379")
 	if err != nil {
 		panic(err)
@@ -15,46 +42,36 @@ func connectRedis() (c redis.Conn) {
 	return c
 }
 
-func connectMysql() *sql.DB {
-	db, err := sql.Open("mysql", "root:root@/oqa")
-	if err != nil {
-		panic(err)
-	}
-	return db
-}
-
-var redis_conn = connectRedis()
-var mysql_db = connectMysql()
+var config = loadConfig()
+var conn_mysql = connectMysql(config)
+var conn_redis = connectRedis(config)
 
 func main() {
-	getShardData()
+	getProjectData()
 }
 
-func getShardData() {
+func getProjectData() {
 	var (
-		id        int
-		projectid string
-		sharded   int
+		id  int
+		api string
 	)
-	rows, err := mysql_db.Query("select * from test")
+	rows, err := conn_mysql.Query("select id,apikey from project")
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		err := rows.Scan(&id, &projectid, &sharded)
+		err := rows.Scan(&id, &api)
 		if err != nil {
 			panic(err)
 		}
-		insertToRedis(projectid, sharded)
+		insertToRedis(api, id)
 	}
 }
 
 func insertToRedis(k string, v int) {
-	n, err := redis_conn.Do("HSET", "oqa_shard", k, v)
+	_, err := conn_redis.Do("HSET", "hqa_projects", k, v)
 	if err != nil {
-		panic(err)
-	} else {
-		log.Println(n, k, v)
+		insertToRedis(k, v)
 	}
 }
