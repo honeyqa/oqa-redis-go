@@ -1,6 +1,13 @@
-# oqa-redis-initializer-go
+# oqa-redis-go
+
+Redis initializer / Session Worker for oqa
 
 ## Usage
 
-1. Get packages : `go get`
-2. Run initializer for insert project/api pair to redis : `go run initializer.go`
+* Get packages : `go get`
+* Insert project/api pair to redis : `go run Initializer/initializer.go`
+* Insert sesion to MySQL from redis every 15min : `go run Worker/worker.go `
+
+## +
+
+* Consider using **[Goforever](https://github.com/gwoo/goforever)**
